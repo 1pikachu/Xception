@@ -63,11 +63,11 @@ def inference(args, val_loader, model):
         for i, (image, _) in enumerate(val_loader):
             if i >= args.num_iter:
                 break
-            image = image.to(args.device)
             if args.channels_last:
                 image = image.to(memory_format=torch.channels_last)
             if args.jit and i == 0:
                 try:
+                    image = image.to(args.device)
                     model = torch.jit.trace(model, image, check_trace=False, strict=False)
                     print("---- JIT trace enable.")
                     if args.bn_folding:
@@ -81,6 +81,7 @@ def inference(args, val_loader, model):
 
             with torch.autograd.profiler_legacy.profile(enabled=args.profile, use_xpu=True, record_shapes=False) as prof:
                 elapsed = time.time()
+                image = image.to(args.device)
                 model(image)
                 torch.xpu.synchronize()
                 elapsed = time.time() - elapsed
@@ -114,11 +115,11 @@ def inference(args, val_loader, model):
             for i, (image, _) in enumerate(val_loader):
                 if i >= args.num_iter:
                     break
-                image = image.to(args.device)
                 if args.channels_last:
                     image = image.to(memory_format=torch.channels_last)
                 if args.jit and i == 0:
                     try:
+                        image = image.to(args.device)
                         model = torch.jit.trace(model, image, check_trace=False, strict=False)
                         print("---- JIT trace enable.")
                         if args.bn_folding:
@@ -131,6 +132,7 @@ def inference(args, val_loader, model):
                         print("failed to use PyTorch jit mode due to: ", e)
 
                 elapsed = time.time()
+                image = image.to(args.device)
                 with torch.jit.fuser(fuser_mode):
                     model(image)
                 torch.cuda.synchronize()
@@ -154,11 +156,11 @@ def inference(args, val_loader, model):
             for i, (image, _) in enumerate(val_loader):
                 if i >= args.num_iter:
                     break
-                image = image.to(args.device)
                 if args.channels_last:
                     image = image.to(memory_format=torch.channels_last)
                 if args.jit and i == 0:
                     try:
+                        image = image.to(args.device)
                         model = torch.jit.trace(model, image, check_trace=False, strict=False)
                         print("---- JIT trace enable.")
                         if args.bn_folding:
@@ -171,6 +173,7 @@ def inference(args, val_loader, model):
                         print("failed to use PyTorch jit mode due to: ", e)
 
                 elapsed = time.time()
+                image = image.to(args.device)
                 model(image)
                 elapsed = time.time() - elapsed
                 p.step()
@@ -182,11 +185,11 @@ def inference(args, val_loader, model):
         for i, (image, _) in enumerate(val_loader):
             if i >= args.num_iter:
                 break
-            image = image.to(args.device)
             if args.channels_last:
                 image = image.to(memory_format=torch.channels_last)
             if args.jit and i == 0:
                 try:
+                    image = image.to(args.device)
                     model = torch.jit.trace(model, image, check_trace=False, strict=False)
                     print("---- JIT trace enable.")
                     if args.bn_folding:
@@ -199,6 +202,7 @@ def inference(args, val_loader, model):
                     print("failed to use PyTorch jit mode due to: ", e)
 
             elapsed = time.time()
+            image = image.to(args.device)
             with torch.jit.fuser(fuser_mode):
                 model(image)
             torch.cuda.synchronize()
@@ -211,11 +215,11 @@ def inference(args, val_loader, model):
         for i, (image, _) in enumerate(val_loader):
             if i >= args.num_iter:
                 break
-            image = image.to(args.device)
             if args.channels_last:
                 image = image.to(memory_format=torch.channels_last)
             if args.jit and i == 0:
                 try:
+                    image = image.to(args.device)
                     model = torch.jit.trace(model, image, check_trace=False, strict=False)
                     print("---- JIT trace enable.")
                     if args.bn_folding:
@@ -228,6 +232,7 @@ def inference(args, val_loader, model):
                     print("failed to use PyTorch jit mode due to: ", e)
 
             elapsed = time.time()
+            image = image.to(args.device)
             model(image)
             if args.device == "xpu":
                 torch.xpu.synchronize()
@@ -269,7 +274,9 @@ def main():
         batch_size=args.batch_size, shuffle=False,
         num_workers=1, pin_memory=True)
 
-    with torch.inference_mode():
+    with torch.no_grad():
+        datatype = torch.float16 if args.precision == "float16" else torch.bfloat16 if args.precision == "bfloat16" else torch.float
+        model = torch.xpu.optimize(model=model, dtype=datatype)
         if args.precision == "float16" and args.device == "cuda":
             print("---- Use autocast fp16 cuda")
             with torch.cuda.amp.autocast(enabled=True, dtype=torch.float16):
