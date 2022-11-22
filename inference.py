@@ -275,6 +275,7 @@ def main():
         num_workers=1, pin_memory=True)
 
     with torch.no_grad():
+        model.eval()
         datatype = torch.float16 if args.precision == "float16" else torch.bfloat16 if args.precision == "bfloat16" else torch.float
         model = torch.xpu.optimize(model=model, dtype=datatype)
         if args.precision == "float16" and args.device == "cuda":
